@@ -80,13 +80,14 @@
 
 var SETUP = {
 	// Used to group all the snooze labels
-	groupingLabel: 'Remind me',
+	groupingLabel: '[Gmailbox]',
 
 	// Labels used for marking e-mails
 	labels: {
 		evening:  'In the evening',
 		tomorrow: 'Tomorrow',
-		saturday: 'On Saturday' 
+		saturday: 'On Saturday',
+		noresponse: 'No response'
 	},
 	
 	// Hours at which triggers will be fired
@@ -95,6 +96,8 @@ var SETUP = {
 		tomorrow: 6, // Tomorrow at 6AM
 		saturday: 6  // On Saturday at 6AM
 	},
+
+	noResponseHours: 24,	// how old can be a sent starred message with no response
 
 	// Mark messages unread after moving them back into inbox
 	markUnread: true
@@ -116,6 +119,7 @@ function Install() {
 	
 	// Create script triggers
 	ScriptApp.newTrigger("cleanLabels").timeBased().everyMinutes(1).create();
+	ScriptApp.newTrigger("noResponseMail").timeBased().everyMinutes(5).create();
 	ScriptApp.newTrigger("runEvening").timeBased().everyDays(1).atHour(SETUP.hours.evening).create();
 	ScriptApp.newTrigger("runTomorrow").timeBased().everyDays(1).atHour(SETUP.hours.tomorrow).create();
 	ScriptApp.newTrigger("runSaturday").timeBased().onWeekDay(ScriptApp.WeekDay.SATURDAY).atHour(SETUP.hours.saturday).create();
@@ -222,4 +226,30 @@ function runSaturday() {
 	 * @access public
 	 **/
 	__moveEmailsToInbox(SETUP.labels.saturday);
+}
+
+function noResponseMail() {
+	/**
+	 * Move starred sent mail with no-response to specific label and mark it as unread
+	 *
+	 * @access public
+	 */
+
+	var curDate = new Date();
+	var compareDate = new Date(curDate.getTime() - (SETUP.noResponseHours * 60 * 60 * 1000));
+
+	// get starred sent mails
+	// unfortunately Google Scripts for Gmail doesn't support has:yellow-star ora has:red-star
+	// in future multiple stars can be used to set different response time
+	var threads = GmailApp.search("in:sent is:starred"); 
+	var threadsCnt = threads.length;
+  
+	var labelNoResponse = __getLabelWithBackoff(SETUP.labels.noresponse);
+
+	for (var i = 0; i < threadsCnt; i++) {
+		if (threads[i].getLastMessageDate() <= compareDate) {
+			threads[i].addLabel(labelNoResponse);
+			threads[i].markUnread();
+		}
+	}
 }
